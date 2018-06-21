@@ -1,0 +1,6 @@
+[package]
+name = "backend-rustless"
+version = "0.1.0"
+authors = ["Olle Kvarnström <olle+git@iix.se>"]
+
+[dependencies]
