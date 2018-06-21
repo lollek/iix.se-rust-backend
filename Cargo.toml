@@ -4,3 +4,6 @@ version = "0.1.0"
 authors = ["Olle Kvarnström <olle+git@iix.se>"]
 
 [dependencies]
+env_logger = "0.5"
+actix-web = "^0.6"
+
