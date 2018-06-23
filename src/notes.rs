@@ -2,26 +2,13 @@ extern crate serde;
 extern crate serde_json;
 extern crate chrono;
 
-use actix_web::{HttpRequest, HttpResponse, Error, Responder, Path, Result};
+use actix_web::{HttpRequest, HttpResponse, Error, Result};
 
 #[derive(Serialize, Deserialize)]
 pub struct Note {
     id: u32,
     title: String,
     date: chrono::DateTime<chrono::Utc>
-}
-
-
-impl Responder for Note {
-    type Item = HttpResponse;
-    type Error = Error;
-
-    fn respond_to<S>(self, req: &HttpRequest<S>) -> Result<HttpResponse, Error> {
-        let body = serde_json::to_string(&self)?;
-        Ok(HttpResponse::Ok()
-           .content_type("application/json")
-           .body(body))
-    }
 }
 
 pub fn list(_req: HttpRequest) -> Result<HttpResponse, Error> {
