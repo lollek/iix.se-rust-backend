@@ -11,6 +11,7 @@ pub struct Note {
     date: chrono::DateTime<chrono::Utc>
 }
 
+
 impl Responder for Note {
     type Item = HttpResponse;
     type Error = Error;
@@ -18,33 +19,53 @@ impl Responder for Note {
     fn respond_to<S>(self, req: &HttpRequest<S>) -> Result<HttpResponse, Error> {
         let body = serde_json::to_string(&self)?;
         Ok(HttpResponse::Ok()
-            .content_type("application/json")
-            .body(body))
+           .content_type("application/json")
+           .body(body))
     }
 }
 
-
-pub fn list(_req: HttpRequest) -> Result<Json<Vec<Note>>> {
-    Ok(Json(vec!(Note { id: 1, title: "Hello world!".to_string(), date: chrono::Utc::now() },
-    Note { id: 1, title: "Hello world!".to_string(), date: chrono::Utc::now() })))
-
+pub fn list(_req: HttpRequest) -> Result<HttpResponse, Error> {
+    let data = vec!(
+        Note { id: 1, title: "Hello world!".to_string(), date: chrono::Utc::now() },
+        Note { id: 1, title: "Hello world!".to_string(), date: chrono::Utc::now() }
+        );
+    let body = serde_json::to_string(&data)?;
+    Ok(HttpResponse::Ok()
+       .content_type("application/json")
+       .body(body))
 }
 
-pub fn get(info: Path<u32>) -> Result<Note> {
+pub fn post(_req: HttpRequest) -> Result<HttpResponse, Error> {
+    let data = Note { id: 0, title: "Hello world!".to_string(), date: chrono::Utc::now() };
+    let body = serde_json::to_string(&data)?;
+    Ok(HttpResponse::Ok()
+       .content_type("application/json")
+       .body(body))
+}
+
+
+pub fn get(req: HttpRequest) -> Result<HttpResponse, Error> {
+    warn!("uri-path: {}", req.uri().path().to_string());
+    warn!("path: {}", req.uri().path().to_string());
+    warn!("info0: {}", req.match_info().get("id").unwrap_or(""));
+    //let id: u32 = info.into_inner();
+    let data = Note { id: 1, title: "Hello world!".to_string(), date: chrono::Utc::now() };
+    let body = serde_json::to_string(&data)?;
+    Ok(HttpResponse::Ok()
+       .content_type("application/json")
+       .body(body))
+}
+
+pub fn put(info: Path<u32>) -> Result<HttpResponse, Error> {
     let id: u32 = info.into_inner();
-    Ok(Note { id: id, title: "Hello world!".to_string(), date: chrono::Utc::now() })
+    let data = Note { id: id, title: "Hello world!".to_string(), date: chrono::Utc::now() };
+    let body = serde_json::to_string(&data)?;
+    Ok(HttpResponse::Ok()
+       .content_type("application/json")
+       .body(body))
 }
 
-pub fn put(info: Path<u32>) -> Result<Note> {
+pub fn delete(info: Path<u32>) -> Result<HttpResponse, Error> {
     let id: u32 = info.into_inner();
-    Ok(Note { id: id, title: "Hello world!".to_string(), date: chrono::Utc::now() })
-}
-
-pub fn post(_req: HttpRequest) -> Result<Note> {
-    Ok(Note { id: 0, title: "Hello world!".to_string(), date: chrono::Utc::now() })
-}
-
-pub fn delete(info: Path<u32>) -> HttpResponse {
-    let id: u32 = info.into_inner();
-    HttpResponse::NoContent().body("")
+    Ok(HttpResponse::NoContent().finish())
 }
