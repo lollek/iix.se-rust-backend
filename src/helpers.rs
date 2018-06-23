@@ -9,8 +9,8 @@ pub fn json(data: &impl Serialize) -> Result<HttpResponse, Error> {
        .body(body))
 }
 
-pub fn get_id(req: &HttpRequest) -> Result<u32, Error> {
+pub fn get_id(req: &HttpRequest) -> Result<i32, Error> {
     req.match_info()
         .get("id").unwrap_or("")
-        .parse::<u32>().map_err(error::ErrorBadRequest)
+        .parse::<i32>().map_err(error::ErrorBadRequest)
 }

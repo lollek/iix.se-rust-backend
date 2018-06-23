@@ -33,20 +33,23 @@ fn main() {
             DB_CONFIG.with(|dbc| {
                 let db = dbc.borrow().connect()?;
                 match *req.method() {
-                    http::Method::GET => notes::list(req, db),
+                    http::Method::GET => notes::list(db),
                     http::Method::POST => notes::post(req),
                     _ => Ok(HttpResponse::NotFound().finish())
                 }
             })
         }))
         .resource("/notes/{id}", |r| r.f(|req| {
-            let id: u32 = helpers::get_id(&req)?;
-            match *req.method() {
-                http::Method::GET => notes::get(req, id),
-                http::Method::PUT => notes::put(req, id),
-                http::Method::DELETE => notes::delete(req, id),
-                _ => Ok(HttpResponse::NotFound().finish())
-            }
+            let id: i32 = helpers::get_id(&req)?;
+            DB_CONFIG.with(|dbc| {
+                let db = dbc.borrow().connect()?;
+                match *req.method() {
+                    http::Method::GET => notes::get(id, db),
+                    //http::Method::PUT => notes::put(req, id),
+                    //http::Method::DELETE => notes::delete(req, id),
+                    _ => Ok(HttpResponse::NotFound().finish())
+                }
+            })
         })))
         .bind("0.0.0.0:8080")
         .unwrap()
