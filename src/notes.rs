@@ -4,6 +4,7 @@ extern crate chrono;
 
 use actix_web::{HttpRequest, HttpResponse, Error, Result};
 
+use database::Connection;
 use helpers::json;
 
 #[derive(Serialize, Deserialize)]
@@ -13,7 +14,7 @@ pub struct Note {
     date: chrono::DateTime<chrono::Utc>
 }
 
-pub fn list(_req: HttpRequest) -> Result<HttpResponse, Error> {
+pub fn list(_req: HttpRequest, db: Connection) -> Result<HttpResponse, Error> {
     let data = vec!(
         Note { id: 1, title: "Hello world!".to_string(), date: chrono::Utc::now() },
         Note { id: 1, title: "Hello world!".to_string(), date: chrono::Utc::now() }
