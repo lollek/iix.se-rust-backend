@@ -1,25 +1,14 @@
 extern crate actix_web;
 extern crate env_logger;
 
-#[macro_use] extern crate serde_derive;
 #[macro_use] extern crate log;
+#[macro_use] extern crate serde_derive;
 
-use actix_web::{http, error, server, middleware, App, HttpRequest, HttpResponse};
+use actix_web::{http, server, middleware, App, HttpResponse};
 use std::env;
 
 mod notes;
-
-fn index(_req: HttpRequest) -> &'static str {
-    "Hello world!"
-}
-
-fn get_id(req: &HttpRequest) -> Result<u32, error::UriSegmentError> {
-    let text = req.match_info().get("id").unwrap_or("");
-    return match text.parse::<u32>() {
-        Ok(id) => Ok(id),
-        Err(_) => Err(error::UriSegmentError::BadEnd(text.chars().next().unwrap()))
-    }
-}
+mod helpers;
 
 fn main() {
     env::set_var("RUST_LOG", "info, actix_web=debug");
@@ -29,7 +18,6 @@ fn main() {
 
     server::new(|| App::new()
         .middleware(middleware::Logger::default())
-        .resource("/", |r| r.f(index))
 
         // Notes
         .resource("/notes", |r| r.f(|req| {
@@ -40,7 +28,7 @@ fn main() {
             }
         }))
         .resource("/notes/{id}", |r| r.f(|req| {
-            let id: u32 = get_id(&req)?;
+            let id: u32 = helpers::get_id(&req)?;
             match *req.method() {
                 http::Method::GET => notes::get(req, id),
                 http::Method::PUT => notes::put(req, id),
