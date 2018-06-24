@@ -1,10 +1,13 @@
-use actix_web::{error, HttpRequest, HttpResponse, Error, Result};
+use actix_web::{http, error, AsyncResponder, HttpMessage, HttpRequest, HttpResponse, FutureResponse, Error, Result};
 
 use postgres::{Connection, rows::Row, rows::Rows};
 use helpers::json;
 use chrono::NaiveDate;
+use futures::{future, Future};
 
-#[derive(Serialize, Deserialize)]
+use state::AppState;
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Note {
     id: i32,
     title: String,
@@ -32,27 +35,34 @@ impl Note {
     }
 }
 
+pub fn notes(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
+    match *req.method() {
+        //http::Method::GET => list(req),
+        http::Method::POST => post(req),
+        _ => Box::new(future::ok(HttpResponse::NotFound().into()))
+    }
+}
+
 pub fn list(conn: Connection) -> Result<HttpResponse, Error> {
     let data: Vec<Note> =
         conn.query("SELECT id, title, date FROM notes", &[])
         .map_err(error::ErrorInternalServerError)?
         .iter()
-        .map(|row| Note::marshall_shallow(row))
+        .map(Note::marshall_shallow)
         .collect();
 
     json(&data)
 }
 
-pub fn post(_req: HttpRequest) -> Result<HttpResponse, Error> {
-    let data = Note {
-        id: 0,
-        title: "Hello world!".to_string(),
-        date: NaiveDate::from_num_days_from_ce(735671),
-        text: None,
-    };
-    json(&data)
+pub fn post(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
+    //let conn = req.state().db_config.connect()?;
+    req.json()
+        .from_err()
+        .and_then(|val: Note| {
+            println!("==== BODY ==== {:?}", val);
+            Ok(HttpResponse::Ok().into())
+        }).responder()
 }
-
 
 pub fn get(id: i32, conn: Connection) -> Result<HttpResponse, Error> {
     let result: Rows =
