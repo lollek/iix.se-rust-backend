@@ -1,10 +1,8 @@
 use actix_web::{http, error, AsyncResponder, HttpMessage, HttpRequest, HttpResponse, FutureResponse, Error, Result};
-
-use postgres::{Connection, rows::Row, rows::Rows};
-use helpers::json;
 use chrono::NaiveDate;
 use futures::{future, Future};
-
+use helpers::{futurize, json, get_id};
+use postgres::{rows::Row, rows::Rows};
 use state::AppState;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -51,11 +49,17 @@ pub fn notes(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
     }
 }
 
-fn list(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
-    match list_inner(req) {
-        Ok(data) => Box::new(future::ok(data)),
-        Err(err) => Box::new(future::err(err))
+pub fn note(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
+    match *req.method() {
+        http::Method::GET => get(req),
+        //http::Method::PUT => post(req),
+        //http::Method::DELETE => delete(req),
+        _ => Box::new(future::ok(HttpResponse::NotFound().into()))
     }
+}
+
+fn list(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
+    futurize(list_inner(req))
 }
 
 fn list_inner(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
@@ -83,9 +87,15 @@ fn post(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
         }).responder()
 }
 
-pub fn get(id: i32, conn: Connection) -> Result<HttpResponse, Error> {
+fn get(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
+    futurize(get_inner(req))
+}
+
+fn get_inner(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
+    let id = get_id(&req)?;
     let result: Rows =
-        conn.query("SELECT id, title, date, text FROM notes WHERE id=$1", &[&id])
+        req.state().db_config.connect()?
+        .query("SELECT id, title, date, text FROM notes WHERE id=$1", &[&id])
         .map_err(error::ErrorInternalServerError)?;
 
     match result.iter().next() {
