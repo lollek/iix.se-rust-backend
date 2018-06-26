@@ -13,8 +13,10 @@ pub fn json(data: &impl Serialize) -> Result<HttpResponse, Error> {
 
 pub fn get_id(req: &HttpRequest<AppState>) -> Result<i32, Error> {
     req.match_info()
-        .get("id").unwrap_or("")
-        .parse::<i32>().map_err(error::ErrorBadRequest)
+        .get("id")
+        .unwrap_or("")
+        .parse::<i32>()
+        .map_err(error::ErrorBadRequest)
 }
 
 pub fn futurize(data: Result<HttpResponse, Error>) -> FutureResponse<HttpResponse> {

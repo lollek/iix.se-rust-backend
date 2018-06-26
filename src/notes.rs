@@ -78,12 +78,25 @@ fn post(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
     req.json()
         .from_err()
         .and_then(move |note: Note| {
-            db_config.connect()?.
-                execute("INSERT INTO notes
+            let conn = db_config.connect()?;
+            conn.execute("INSERT INTO notes
                 (title, text, date) VALUES ($1, $2, $3)",
                 &[&note.title, &note.text, &note.date])
                 .map_err(error::ErrorInternalServerError)?;
-            Ok(HttpResponse::Ok().into())
+            let id: i64 = match conn.query("SELECT LASTVAL()", &[])
+                .map_err(error::ErrorInternalServerError)?
+                .iter()
+                .next() {
+                    Some(row) => row.get("lastval"),
+                    None => 0
+                };
+            println!("ID: {}", id);
+            Ok(json(&Note {
+                id: id as i32,
+                title: note.title,
+                text: note.text,
+                date: note.date,
+            }).into())
         }).responder()
 }
 
