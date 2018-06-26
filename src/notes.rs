@@ -8,29 +8,37 @@ use futures::{future, Future};
 use state::AppState;
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct NoteRef {
+    id: i32,
+    title: String,
+    date: NaiveDate,
+}
+
+impl NoteRef {
+    fn marshall(row: Row) -> NoteRef {
+        NoteRef {
+            id: row.get("id"),
+            title: row.get("title"),
+            date: row.get("date"),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Note {
     id: i32,
     title: String,
-    text: Option<String>,
+    text: String,
     date: NaiveDate,
 }
 
 impl Note {
-    fn marshall_shallow(row: Row) -> Note {
+    fn marshall(row: Row) -> Note {
         Note {
             id: row.get("id"),
             title: row.get("title"),
             date: row.get("date"),
-            text: None,
-        }
-    }
-
-    fn marshall_deep(row: Row) -> Note {
-        Note {
-            id: row.get("id"),
-            title: row.get("title"),
-            date: row.get("date"),
-            text: Some(row.get("text")),
+            text: row.get("text"),
         }
     }
 }
@@ -44,22 +52,26 @@ pub fn notes(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
 }
 
 pub fn list(conn: Connection) -> Result<HttpResponse, Error> {
-    let data: Vec<Note> =
+    let data: Vec<NoteRef> =
         conn.query("SELECT id, title, date FROM notes", &[])
         .map_err(error::ErrorInternalServerError)?
         .iter()
-        .map(Note::marshall_shallow)
+        .map(NoteRef::marshall)
         .collect();
 
     json(&data)
 }
 
 pub fn post(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
-    //let conn = req.state().db_config.connect()?;
+    let db_config = req.state().db_config.to_owned();
     req.json()
         .from_err()
-        .and_then(|val: Note| {
-            println!("==== BODY ==== {:?}", val);
+        .and_then(move |note: Note| {
+            db_config.connect()?.
+                execute("INSERT INTO notes
+                (title, text, date) VALUES ($1, $2, $3)",
+                &[&note.title, &note.text, &note.date])
+                .map_err(error::ErrorInternalServerError)?;
             Ok(HttpResponse::Ok().into())
         }).responder()
 }
@@ -70,7 +82,7 @@ pub fn get(id: i32, conn: Connection) -> Result<HttpResponse, Error> {
         .map_err(error::ErrorInternalServerError)?;
 
     match result.iter().next() {
-        Some(row) => json(&Note::marshall_deep(row)),
+        Some(row) => json(&Note::marshall(row)),
         None => Ok(HttpResponse::NotFound().finish())
     }
 }
@@ -78,9 +90,9 @@ pub fn get(id: i32, conn: Connection) -> Result<HttpResponse, Error> {
 pub fn put(_req: HttpRequest, id: u32) -> Result<HttpResponse, Error> {
     let data = Note {
         id: 0,
-        title: "Hello world!".to_string(),
+        title: "Hello world!".to_owned(),
         date: NaiveDate::from_num_days_from_ce(735671),
-        text: None,
+        text: "Hello".to_owned(),
     };
     json(&data)
 }
