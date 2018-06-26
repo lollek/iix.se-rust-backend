@@ -45,24 +45,31 @@ impl Note {
 
 pub fn notes(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
     match *req.method() {
-        //http::Method::GET => list(req),
+        http::Method::GET => list(req),
         http::Method::POST => post(req),
         _ => Box::new(future::ok(HttpResponse::NotFound().into()))
     }
 }
 
-pub fn list(conn: Connection) -> Result<HttpResponse, Error> {
+fn list(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
+    match list_inner(req) {
+        Ok(data) => Box::new(future::ok(data)),
+        Err(err) => Box::new(future::err(err))
+    }
+}
+
+fn list_inner(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
     let data: Vec<NoteRef> =
-        conn.query("SELECT id, title, date FROM notes", &[])
+        req.state().db_config.connect()?
+        .query("SELECT id, title, date FROM notes", &[])
         .map_err(error::ErrorInternalServerError)?
         .iter()
         .map(NoteRef::marshall)
         .collect();
-
     json(&data)
 }
 
-pub fn post(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
+fn post(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
     let db_config = req.state().db_config.to_owned();
     req.json()
         .from_err()

@@ -8,7 +8,7 @@ extern crate serde;
 extern crate serde_json;
 extern crate futures;
 
-use actix_web::{http, server, middleware, App, HttpResponse};
+use actix_web::{server, middleware, App};
 use std::env;
 
 mod state;
