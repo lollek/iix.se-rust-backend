@@ -1,5 +1,6 @@
 use actix_web::{http, error, AsyncResponder, HttpMessage, HttpRequest, HttpResponse, FutureResponse, Error, Result};
 use chrono::NaiveDate;
+use database::lastval;
 use futures::{future, Future};
 use helpers::{futurize, json, get_id};
 use postgres::{rows::Row, rows::Rows};
@@ -75,28 +76,24 @@ fn list_inner(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
 
 fn post(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
     let db_config = req.state().db_config.to_owned();
+
     req.json()
         .from_err()
         .and_then(move |note: Note| {
             let conn = db_config.connect()?;
+
             conn.execute("INSERT INTO notes
                 (title, text, date) VALUES ($1, $2, $3)",
                 &[&note.title, &note.text, &note.date])
                 .map_err(error::ErrorInternalServerError)?;
-            let id: i64 = match conn.query("SELECT LASTVAL()", &[])
-                .map_err(error::ErrorInternalServerError)?
-                .iter()
-                .next() {
-                    Some(row) => row.get("lastval"),
-                    None => 0
-                };
-            println!("ID: {}", id);
+
             Ok(json(&Note {
-                id: id as i32,
+                id: lastval(conn)?.unwrap_or(0) as i32,
                 title: note.title,
                 text: note.text,
                 date: note.date,
             }).into())
+
         }).responder()
 }
 
@@ -105,10 +102,10 @@ fn get(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
 }
 
 fn get_inner(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
-    let id = get_id(&req)?;
     let result: Rows =
         req.state().db_config.connect()?
-        .query("SELECT id, title, date, text FROM notes WHERE id=$1", &[&id])
+        .query("SELECT id, title, date, text FROM notes WHERE id=$1",
+               &[&get_id(&req)?])
         .map_err(error::ErrorInternalServerError)?;
 
     match result.iter().next() {

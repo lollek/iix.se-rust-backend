@@ -28,3 +28,12 @@ pub fn init(host: &str, port: &str, username: &str, password: &str,
                                username, password, host, port, database);
     Config { query_string: query_string }
 }
+
+// Returns the last inserted id for the session
+pub fn lastval(conn: Connection) -> Result<Option<i64>, Error> {
+    Ok(conn.query("SELECT LASTVAL()", &[])
+        .map_err(error::ErrorInternalServerError)?
+        .iter()
+        .next()
+        .map(|row| row.get("lastval")))
+}
