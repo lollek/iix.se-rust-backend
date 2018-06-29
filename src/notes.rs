@@ -53,17 +53,17 @@ pub fn notes(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
 pub fn note(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
     match *req.method() {
         http::Method::GET => get(req),
-        //http::Method::PUT => post(req),
-        //http::Method::DELETE => delete(req),
+        http::Method::PUT => put(req),
+        http::Method::DELETE => delete(req),
         _ => Box::new(future::ok(HttpResponse::NotFound().into()))
     }
 }
 
 fn list(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
-    futurize(list_inner(req))
+    futurize(inner_list(req))
 }
 
-fn list_inner(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
+fn inner_list(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
     let data: Vec<NoteRef> =
         req.state().db_config.connect()?
         .query("SELECT id, title, date FROM notes", &[])
@@ -79,7 +79,7 @@ fn post(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
 
     req.json()
         .from_err()
-        .and_then(move |note: Note| {
+        .and_then(move |mut note: Note| {
             let conn = db_config.connect()?;
 
             conn.execute("INSERT INTO notes
@@ -87,21 +87,17 @@ fn post(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
                 &[&note.title, &note.text, &note.date])
                 .map_err(error::ErrorInternalServerError)?;
 
-            Ok(json(&Note {
-                id: lastval(conn)?.unwrap_or(0) as i32,
-                title: note.title,
-                text: note.text,
-                date: note.date,
-            }).into())
+            note.id = lastval(conn)?.unwrap_or(0) as i32;
+            Ok(json(&note).into())
 
         }).responder()
 }
 
 fn get(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
-    futurize(get_inner(req))
+    futurize(inner_get(req))
 }
 
-fn get_inner(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
+fn inner_get(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
     let result: Rows =
         req.state().db_config.connect()?
         .query("SELECT id, title, date, text FROM notes WHERE id=$1",
@@ -114,16 +110,31 @@ fn get_inner(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
     }
 }
 
-pub fn put(_req: HttpRequest, id: u32) -> Result<HttpResponse, Error> {
-    let data = Note {
-        id: 0,
-        title: "Hello world!".to_owned(),
-        date: NaiveDate::from_num_days_from_ce(735671),
-        text: "Hello".to_owned(),
-    };
-    json(&data)
+fn put(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
+    let db_config = req.state().db_config.to_owned();
+    let id = get_id(&req);
+
+    req.json()
+        .from_err()
+        .and_then(move |mut note: Note| {
+            note.id = id?;
+            db_config.connect()?
+                .execute("UPDATE notes
+                SET title = $1, text = $2, date = $3
+                WHERE id = $4",
+                &[&note.title, &note.text, &note.date, &note.id])
+                .map_err(error::ErrorInternalServerError)?;
+            Ok(json(&note).into())
+        }).responder()
 }
 
-pub fn delete(_req: HttpRequest, _id: u32) -> Result<HttpResponse, Error> {
+fn delete(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
+    futurize(inner_delete(req))
+}
+
+fn inner_delete(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
+    req.state().db_config.connect()?
+        .execute("DELETE FROM notes WHERE id=$1", &[&get_id(&req)?])
+        .map_err(error::ErrorInternalServerError)?;
     Ok(HttpResponse::NoContent().finish())
 }
