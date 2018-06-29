@@ -118,13 +118,20 @@ fn put(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
         .from_err()
         .and_then(move |mut note: Note| {
             note.id = id?;
-            db_config.connect()?
+
+            let affected_rows = db_config.connect()?
                 .execute("UPDATE notes
                 SET title = $1, text = $2, date = $3
                 WHERE id = $4",
                 &[&note.title, &note.text, &note.date, &note.id])
                 .map_err(error::ErrorInternalServerError)?;
-            Ok(json(&note).into())
+
+            match affected_rows {
+                1 => Ok(json(&note).into()),
+                0 => Ok(HttpResponse::NotFound().finish().into()),
+                _ => Ok(HttpResponse::InternalServerError().finish().into())
+            }
+
         }).responder()
 }
 
@@ -133,8 +140,13 @@ fn delete(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
 }
 
 fn inner_delete(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
-    req.state().db_config.connect()?
+    let affected_rows = req.state().db_config.connect()?
         .execute("DELETE FROM notes WHERE id=$1", &[&get_id(&req)?])
         .map_err(error::ErrorInternalServerError)?;
-    Ok(HttpResponse::NoContent().finish())
+
+    match affected_rows {
+        1 => Ok(HttpResponse::NoContent().finish()),
+        0 => Ok(HttpResponse::NotFound().finish()),
+        _ => Ok(HttpResponse::InternalServerError().finish())
+    }
 }
