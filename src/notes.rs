@@ -7,14 +7,14 @@ use postgres::{rows::Row, rows::Rows};
 use state::AppState;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct NoteRef {
+struct NoteRef {
     id: i32,
     title: String,
     date: NaiveDate,
 }
 
-impl NoteRef {
-    fn marshall(row: Row) -> NoteRef {
+impl<'a> From<Row<'a>> for NoteRef {
+    fn from(row: Row) -> Self {
         NoteRef {
             id: row.get("id"),
             title: row.get("title"),
@@ -24,15 +24,15 @@ impl NoteRef {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Note {
+struct Note {
     id: i32,
     title: String,
     text: String,
     date: NaiveDate,
 }
 
-impl Note {
-    fn marshall(row: Row) -> Note {
+impl<'a> From<Row<'a>> for Note {
+    fn from(row: Row) -> Self {
         Note {
             id: row.get("id"),
             title: row.get("title"),
@@ -42,37 +42,19 @@ impl Note {
     }
 }
 
-pub fn notes(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
-    match *req.method() {
-        http::Method::GET => list(req),
-        http::Method::POST => post(req),
-        _ => Box::new(future::ok(HttpResponse::NotFound().into()))
-    }
-}
-
-pub fn note(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
-    match *req.method() {
-        http::Method::GET => get(req),
-        http::Method::PUT => put(req),
-        http::Method::DELETE => delete(req),
-        _ => Box::new(future::ok(HttpResponse::NotFound().into()))
-    }
+fn inner_list(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
+    json(&req.state().db_config.connect()?
+        .query("SELECT id, title, date FROM notes", &[])
+        .map_err(error::ErrorInternalServerError)?
+        .into_iter()
+        .map(NoteRef::from)
+        .collect::<Vec<NoteRef>>())
 }
 
 fn list(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
     futurize(inner_list(req))
 }
 
-fn inner_list(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
-    let data: Vec<NoteRef> =
-        req.state().db_config.connect()?
-        .query("SELECT id, title, date FROM notes", &[])
-        .map_err(error::ErrorInternalServerError)?
-        .iter()
-        .map(NoteRef::marshall)
-        .collect();
-    json(&data)
-}
 
 fn post(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
     let db_config = req.state().db_config.to_owned();
@@ -93,10 +75,6 @@ fn post(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
         }).responder()
 }
 
-fn get(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
-    futurize(inner_get(req))
-}
-
 fn inner_get(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
     let result: Rows =
         req.state().db_config.connect()?
@@ -104,11 +82,16 @@ fn inner_get(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
                &[&get_id(&req)?])
         .map_err(error::ErrorInternalServerError)?;
 
-    match result.iter().next() {
-        Some(row) => json(&Note::marshall(row)),
+    match result.into_iter().next() {
+        Some(row) => json(&Note::from(row)),
         None => Ok(HttpResponse::NotFound().finish())
     }
 }
+
+fn get(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
+    futurize(inner_get(req))
+}
+
 
 fn put(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
     let db_config = req.state().db_config.to_owned();
@@ -135,10 +118,6 @@ fn put(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
         }).responder()
 }
 
-fn delete(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
-    futurize(inner_delete(req))
-}
-
 fn inner_delete(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
     let affected_rows = req.state().db_config.connect()?
         .execute("DELETE FROM notes WHERE id=$1", &[&get_id(&req)?])
@@ -148,5 +127,26 @@ fn inner_delete(req: HttpRequest<AppState>) -> Result<HttpResponse, Error> {
         1 => Ok(HttpResponse::NoContent().finish()),
         0 => Ok(HttpResponse::NotFound().finish()),
         _ => Ok(HttpResponse::InternalServerError().finish())
+    }
+}
+
+fn delete(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
+    futurize(inner_delete(req))
+}
+
+pub fn notes(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
+    match *req.method() {
+        http::Method::GET => list(req),
+        http::Method::POST => post(req),
+        _ => Box::new(future::ok(HttpResponse::NotFound().into()))
+    }
+}
+
+pub fn note(req: HttpRequest<AppState>) -> FutureResponse<HttpResponse> {
+    match *req.method() {
+        http::Method::GET => get(req),
+        http::Method::PUT => put(req),
+        http::Method::DELETE => delete(req),
+        _ => Box::new(future::ok(HttpResponse::NotFound().into()))
     }
 }

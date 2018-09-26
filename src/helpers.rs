@@ -1,11 +1,12 @@
+use serde;
+use serde_json;
+
 use actix_web::{error, Error, FutureResponse, HttpResponse, HttpRequest};
 use futures::future;
-use serde::Serialize;
-use serde_json::to_string;
 use state::AppState;
 
-pub fn json(data: &impl Serialize) -> Result<HttpResponse, Error> {
-    let body = to_string(data)?;
+pub fn json(data: &impl serde::Serialize) -> Result<HttpResponse, Error> {
+    let body = serde_json::to_string(data)?;
     Ok(HttpResponse::Ok()
        .content_type("application/json")
        .body(body))
